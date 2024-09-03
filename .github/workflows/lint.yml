@@ -72,3 +72,18 @@ jobs:
         )"
         echo "$issues"
         [ "$issues" == "" ] || exit 1
+
+  vulture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+    - name: Lint with vulture
+      run: |
+        python -m pip install --upgrade pip
+        pip install vulture
+        git ls-files -z '**.py' | xargs -0 vulture --min-confidence 100
