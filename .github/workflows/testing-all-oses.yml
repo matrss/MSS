@@ -29,13 +29,13 @@ jobs:
           sed -e "s/.*://" > requirements.tmp.txt
         cat requirements.d/development.txt >> requirements.tmp.txt
         echo "pytest-randomly" >> requirements.tmp.txt
-        sed -e '/^$/d' -e '/^#.*$/d' requirements.tmp.txt > requirements.txt
+        sed -e '/^$/d' -e '/^#.*$/d' -e 's/\s*# \[not win\]$//' requirements.tmp.txt > requirements.txt
         rm requirements.tmp.txt
         cat requirements.txt
     - name: Get current year and calendar week
       id: year-and-week
       run: echo "year-and-week=$(date +%Y-%V)" >> "$GITHUB_OUTPUT"
-    - uses: mamba-org/setup-micromamba@v1
+    - uses: mamba-org/setup-micromamba@v2
       with:
         environment-file: requirements.txt
         environment-name: ci
