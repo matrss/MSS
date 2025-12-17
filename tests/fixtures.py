@@ -196,16 +196,44 @@ def _running_eventlet_server(app):
     """Context manager that starts the app in an eventlet server and returns its URL."""
     scheme = "http"
     host = "127.0.0.1"
-    socket = eventlet.listen((host, 0))
-    port = socket.getsockname()[1]
-    url = f"{scheme}://{host}:{port}"
-    app.config['URL'] = url
+
     if "fork" not in multiprocessing.get_all_start_methods():
         pytest.skip("requires the multiprocessing start_method 'fork', which is unavailable on this system")
+
     ctx = multiprocessing.get_context("fork")
-    process = ctx.Process(target=eventlet.wsgi.server, args=(socket, app), daemon=True)
+
+    def _serve_in_child(conn, _app, _host, _scheme):
+        # Create the listening socket inside the child to avoid passing GreenSocket/FD across fork.
+        sock = eventlet.listen((_host, 0))
+        port = sock.getsockname()[1]
+        url = f"{_scheme}://{_host}:{port}"
+
+        try:
+            _app.config["URL"] = url
+        except Exception:
+            # If app/config is not writable for some reason, still start server.
+            pass
+
+        conn.send(port)
+        conn.close()
+
+        # Run until terminated by parent.
+        eventlet.wsgi.server(sock, _app)
+
+    parent_conn, child_conn = ctx.Pipe(duplex=False)
+    process = ctx.Process(target=_serve_in_child, args=(child_conn, app, host, scheme), daemon=True)
+
     try:
         process.start()
+
+        # Wait for the child to report the bound port.
+        if not parent_conn.poll(5):
+            raise RuntimeError("Server did not report its port within 5 seconds")
+        port = parent_conn.recv()
+
+        url = f"{scheme}://{host}:{port}"
+        app.config["URL"] = url
+
         start_time = time.time()
         sleep_time = 0.01
         while not is_url_response_ok(urllib.parse.urljoin(url, "index")):
@@ -215,8 +243,13 @@ def _running_eventlet_server(app):
             sleep_time *= 2
             if sleep_time > 1:
                 sleep_time = 1
+
         yield url
     finally:
+        try:
+            parent_conn.close()
+        except Exception:
+            pass
         process.terminate()
         process.join(10)
         process.close()
