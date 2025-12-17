@@ -141,6 +141,11 @@ def reset_mscolab(mscolab_session_app):
         handle_db_reset()
 
 
+@pytest.fixture(scope="session")
+def msui_configs(tmp_path):
+    modify_config_file({"mss_dir": tmp_path.name})
+
+
 @pytest.fixture
 def mscolab_app(mscolab_session_app, reset_mscolab):
     """Fixture that provides the MSColab WSGI app instance and does cleanup actions.
