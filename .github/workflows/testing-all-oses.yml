@@ -2,10 +2,6 @@ name: Test MSS
 
 on:
   push:
-    branches:
-      - develop
-      - stable
-      - 'GSOC**'
   pull_request:
     branches:
       - develop
